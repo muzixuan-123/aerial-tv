@@ -2,6 +2,11 @@ name: build-aerial
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -15,18 +20,26 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install SDK packages
-        run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
+        run: |
+          SM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SM" ] || SM=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -1)
+          yes | "$SM" --licenses > /dev/null || true
+          "$SM" "platforms;android-36" "build-tools;35.0.0"
 
       - name: Build guard release APK
         run: ./gradlew assembleGuardRelease --console=plain
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: aerial-guard-release
           path: app/build/outputs/apk/guard/release/*.apk
           if-no-files-found: error
+
+      - name: Publish release with APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Aerial custom build ${{ github.run_number }}
+          files: app/build/outputs/apk/guard/release/*.apk
